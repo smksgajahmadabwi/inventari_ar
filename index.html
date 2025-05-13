@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>AR Interaktif</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Babylon.js -->
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+      background: black;
+    }
+
+    #videoBackground {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: 0;
+    }
+
+    #renderCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: transparent;
+      touch-action: none;
+      z-index: 1;
+    }
+
+    /* FRAME MODERN KOTAK */
+    #modernFrame {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .frame-border {
+      position: absolute;
+      border: 4px solid rgba(0, 255, 200, 2.8);
+      box-shadow: 0 0 20px rgba(0, 255, 200, 2.7);
+      border-radius: 10px;
+    }
+
+    .top-border {
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      height: 0;
+      border-width: 7px 0 0 0;
+    }
+
+    .bottom-border {
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      height: 0;
+      border-width: 0 0 7px 0;
+    }
+
+    .left-border {
+      top: 20px;
+      bottom: 20px;
+      left: 20px;
+      width: 0;
+      border-width: 0 0 0 7px;
+    }
+
+    .right-border {
+      top: 20px;
+      bottom: 20px;
+      right: 20px;
+      width: 0;
+      border-width: 0 7px 0 0;
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- Video Kamera -->
+<video id="videoBackground" autoplay playsinline muted></video>
+
+<!-- 3D Canvas -->
+<canvas id="renderCanvas"></canvas>
+<div id="modernFrame">
+  <div class="frame-border top-border"></div>
+  <div class="frame-border bottom-border"></div>
+  <div class="frame-border left-border"></div>
+  <div class="frame-border right-border"></div>
+</div>
+  
+<script>
+  window.addEventListener('DOMContentLoaded', async function () {
+    const canvas = document.getElementById('renderCanvas');
+    const video = document.getElementById('videoBackground');
+    const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
+
+    // Start Kamera
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false
+        });
+        video.srcObject = stream;
+        await video.play();
+      } catch (error) {
+        console.error('Gagal mengakses kamera:', error);
+      }
+    }
+    await startCamera();
+
+    // Membuat scene
+    const createScene = async function () {
+      const scene = new BABYLON.Scene(engine);
+      scene.clearColor = new BABYLON.Color4(0, 0, 0, 0); // <-- Transparan
+
+      // Kamera 3D
+      const camera = new BABYLON.ArcRotateCamera("arcCamera",
+        Math.PI / 2, Math.PI / 2.5, 2,
+        new BABYLON.Vector3(0, 0, 0),
+        scene);
+      camera.attachControl(canvas, true);
+
+      // Cahaya
+      const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+
+      // Load model
+      const urlParams = new URLSearchParams(window.location.search);
+      const modelName = urlParams.get('model');
+      let model = null;
+
+      if (modelName) {
+        await BABYLON.SceneLoader.ImportMeshAsync(
+          "", "./model/", modelName, scene
+        ).then(function (result) {
+          model = result.meshes[0];
+          model.scaling.scaleInPlace(0.5);
+          model.position = new BABYLON.Vector3(0, 0, 0);
+        }).catch(function (error) {
+          console.error("Gagal load model:", error);
+        });
+      }
+
+      // Geser model dengan jari
+      let isDragging = false;
+      let lastX = 0;
+      let lastY = 0;
+
+      canvas.addEventListener("touchstart", (evt) => {
+        if (evt.touches.length === 1) {
+          isDragging = true;
+          lastX = evt.touches[0].clientX;
+          lastY = evt.touches[0].clientY;
+        }
+      });
+
+      const speed = 100; // kecepatan geser
+
+    canvas.addEventListener("touchmove", (evt) => {
+    if (isDragging && evt.touches.length === 1 && model) {
+    const deltaX = (evt.touches[0].clientX - lastX) / speed;
+    const deltaY = (evt.touches[0].clientY - lastY) / speed;
+    model.position.x += deltaX;
+    model.position.y -= deltaY;
+    lastX = evt.touches[0].clientX;
+    lastY = evt.touches[0].clientY;
+  }
+});
+
+      canvas.addEventListener("touchend", () => {
+        isDragging = false;
+      });
+
+      return scene;
+    };
+
+    const scene = await createScene();
+    engine.runRenderLoop(() => {
+      scene.render();
+    });
+
+    window.addEventListener('resize', () => {
+      engine.resize();
+    });
+  });
+</script>
+
+</body>
+</html>
